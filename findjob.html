@@ -234,6 +234,44 @@
     border-top: 1px solid var(--border);
     margin-top: 40px;
   }
+  .time-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding: 14px 18px;
+    background: #eef2f8;
+    border-left: 4px solid var(--accent);
+    flex-wrap: wrap;
+  }
+  .time-controls p { font-size: 0.84rem; color: var(--ink); flex: 1; }
+  .time-controls strong { color: var(--accent); }
+  .go-back-btn {
+    background: transparent;
+    border: 1.5px solid var(--accent);
+    color: var(--accent);
+    padding: 7px 16px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .go-back-btn:hover { background: var(--accent); color: white; }
+  .go-back-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .time-window-pills { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+  .time-pill {
+    padding: 4px 14px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: default;
+    border: 1.5px solid var(--border);
+    color: var(--muted);
+    letter-spacing: 0.03em;
+  }
+  .time-pill.active { border-color: var(--accent); color: var(--accent); background: #eef2f8; }
+  .time-pill.searched { border-color: var(--success); color: var(--success); background: #e8f4ec; }
   @media (max-width: 600px) {
     header { padding: 20px; flex-direction: column; gap: 16px; align-items: flex-start; }
     .main { padding: 20px 16px; }
@@ -257,7 +295,7 @@
 <div class="filters">
   <span class="filter-tag">&#128205; Remote / Phoenix AZ</span>
   <span class="filter-tag">&#128176; $160K+ Salary</span>
-  <span class="filter-tag">&#8987; Posted within 24 hours</span>
+  <span class="filter-tag" id="timeWindowTag">&#8987; Posted within 24 hours</span>
   <span class="filter-tag">&#129302; AI Product Manager</span>
   <span class="filter-tag">&#127973; Health Tech / Health Insurance</span>
 </div>
@@ -266,6 +304,20 @@
   <div class="status-bar">
     <span class="status-text" id="statusText">Click "Search Jobs" to find the latest openings</span>
     <span class="job-count" id="jobCount"></span>
+  </div>
+
+  <div id="timeWindowControls" style="display:none;">
+    <div class="time-window-pills">
+      <span class="time-pill" id="pill-1">24 Hours</span>
+      <span class="time-pill" id="pill-3">3 Days</span>
+      <span class="time-pill" id="pill-7">7 Days</span>
+    </div>
+    <div class="time-controls">
+      <p id="timeWindowMsg">Searching the last <strong id="timeWindowLabel">24 hours</strong></p>
+      <button class="go-back-btn" id="goBackBtn" onclick="goBackFurther()" style="display:none;">
+        &#8592; Go back further
+      </button>
+    </div>
   </div>
 
   <div id="errorBanner" class="error-banner" style="display:none;"></div>
@@ -360,7 +412,35 @@ async function callClaude(messages, system, tools) {
   return res.json();
 }
 
+// Time window state: 1 = 24hrs, 3 = 3 days, 7 = 7 days
+let currentWindow = 1;
+const TIME_WINDOWS = [1, 3, 7];
+const TIME_LABELS = { 1: "24 hours", 3: "3 days", 7: "7 days" };
+
+function goBackFurther() {
+  const idx = TIME_WINDOWS.indexOf(currentWindow);
+  if (idx < TIME_WINDOWS.length - 1) {
+    currentWindow = TIME_WINDOWS[idx + 1];
+    searchJobsForWindow(currentWindow);
+  }
+}
+
+function updateTimePills(window) {
+  [1, 3, 7].forEach(w => {
+    const pill = document.getElementById("pill-" + w);
+    if (!pill) return;
+    pill.className = "time-pill";
+    if (w === window) pill.classList.add("active");
+    else if (TIME_WINDOWS.indexOf(w) < TIME_WINDOWS.indexOf(window)) pill.classList.add("searched");
+  });
+}
+
 async function searchJobs() {
+  currentWindow = 1;
+  searchJobsForWindow(1);
+}
+
+async function searchJobsForWindow(days) {
   const btn = document.getElementById("refreshBtn");
   btn.disabled = true;
   btn.innerHTML = '<span style="display:inline-block;animation:spin 0.8s linear infinite">&#8635;</span> Searching...';
@@ -370,7 +450,15 @@ async function searchJobs() {
   document.getElementById("loadingState").style.display = "block";
   document.getElementById("errorBanner").style.display = "none";
   document.getElementById("jobCount").textContent = "";
+  document.getElementById("timeWindowControls").style.display = "block";
+  document.getElementById("goBackBtn").style.display = "none";
+
+  const label = TIME_LABELS[days];
+  document.getElementById("timeWindowLabel").textContent = label;
+  document.getElementById("timeWindowTag").textContent = "⌛ Posted within " + label;
+  document.getElementById("timeWindowMsg").innerHTML = 'Searching jobs posted in the last <strong>' + label + '</strong>';
   document.getElementById("statusText").textContent = "Searching job boards...";
+  updateTimePills(days);
 
   const steps = [
     "Scanning LinkedIn, Indeed, and company career pages...",
@@ -388,13 +476,16 @@ async function searchJobs() {
 
   try {
     const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const timeFilter = days === 1 ? "within the last 24 hours (today or yesterday)" :
+                       days === 3 ? "within the last 3 days" :
+                       "within the last 7 days (this week)";
 
     const data = await callClaude([{
       role: "user",
       content: `Today is ${today}. Search for the top 10 Product Manager job openings that meet ALL of these criteria:
 1. Role type: AI Product Manager, Senior Product Manager, Staff Product Manager, Principal Product Manager, or Technical Product Manager
 2. Industry: health tech companies OR health insurance companies (payors)
-3. Posted within the last 24 hours (today or yesterday)
+3. Posted ${timeFilter}
 4. Salary: $160,000 or above annually
 5. Location: Remote (US) OR within Phoenix/Tempe/Scottsdale/Gilbert Arizona area
 
@@ -417,7 +508,8 @@ Return ONLY a valid JSON object with this exact structure — no markdown, no ex
       "whyMatch": "Brief reason why this matches Shilpi's background"
     }
   ],
-  "searchNote": "Brief note about search results"
+  "jobsFound": 5,
+  "searchNote": "Brief note about search results including the time window searched"
 }`
     }], "You are a job search specialist. Search the web for real, current job postings and return structured JSON only. No markdown formatting. Just raw JSON.", [{
       type: "web_search_20250305",
@@ -432,15 +524,32 @@ Return ONLY a valid JSON object with this exact structure — no markdown, no ex
     }
 
     jobsJson = jobsJson.trim();
-    const jsonMatch = jobsJson.match(/\{[\s\S]*\}/);
+    const jsonMatch = jobsJson.match(/{[\s\S]*}/);
     if (!jsonMatch) throw new Error("No valid JSON found in response");
 
     const result = JSON.parse(jsonMatch[0]);
     const jobs = result.jobs || [];
 
-    if (jobs.length === 0) throw new Error("No jobs found matching your criteria");
+    if (jobs.length === 0) {
+      // Auto-fallback if more days available
+      const idx = TIME_WINDOWS.indexOf(days);
+      if (idx < TIME_WINDOWS.length - 1) {
+        clearInterval(stepInterval);
+        const nextWindow = TIME_WINDOWS[idx + 1];
+        document.getElementById("loadingState").style.display = "none";
+        document.getElementById("errorBanner").style.display = "block";
+        document.getElementById("errorBanner").innerHTML = `No jobs found in the last ${label}. <button onclick="goBackFurther()" style="background:var(--accent2);color:white;border:none;padding:4px 12px;cursor:pointer;font-weight:600;margin-left:8px;">Search last ${TIME_LABELS[nextWindow]} instead</button>`;
+        document.getElementById("emptyState").style.display = "block";
+        document.getElementById("statusText").textContent = "No results — try a wider window";
+        btn.disabled = false;
+        btn.innerHTML = '<span>&#8635;</span> Refresh Search';
+        return;
+      } else {
+        throw new Error("No jobs found in the last 7 days matching your criteria");
+      }
+    }
 
-    renderJobs(jobs, result.searchNote);
+    renderJobs(jobs, result.searchNote, days);
 
   } catch (err) {
     clearInterval(stepInterval);
@@ -455,7 +564,7 @@ Return ONLY a valid JSON object with this exact structure — no markdown, no ex
   }
 }
 
-function renderJobs(jobs, note) {
+function renderJobs(jobs, note, days) {
   document.getElementById("loadingState").style.display = "none";
   document.getElementById("emptyState").style.display = "none";
 
@@ -463,7 +572,20 @@ function renderJobs(jobs, note) {
   grid.innerHTML = "";
   grid.style.display = "flex";
 
-  document.getElementById("statusText").textContent = note || `Found ${jobs.length} matching roles`;
+  const label = TIME_LABELS[days] || "24 hours";
+  const idx = TIME_WINDOWS.indexOf(days);
+  const hasMore = idx < TIME_WINDOWS.length - 1;
+  document.getElementById("statusText").textContent = note || `Found ${jobs.length} roles posted in the last ${label}`;
+  document.getElementById("timeWindowMsg").innerHTML = `Found <strong>${jobs.length} jobs</strong> posted in the last <strong>${label}</strong>`;
+  if (hasMore) {
+    const nextLabel = TIME_LABELS[TIME_WINDOWS[idx + 1]];
+    const goBackBtn = document.getElementById("goBackBtn");
+    goBackBtn.style.display = "block";
+    goBackBtn.textContent = "↩ Go back further (" + nextLabel + ")";
+  } else {
+    document.getElementById("goBackBtn").style.display = "none";
+    document.getElementById("timeWindowMsg").innerHTML += ' <em style="color:var(--muted);font-size:0.8rem;">(maximum 7 days reached)</em>';
+  }
   document.getElementById("jobCount").textContent = `${jobs.length} jobs`;
 
   jobs.forEach(job => {
