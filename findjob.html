@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PM Job Finder — Shilpi Karn</title>
+<script src="https://unpkg.com/docx@7.8.2/build/index.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0f1923;
+    --paper: #f5f2ec;
+    --accent: #1e4d8c;
+    --accent2: #c8472b;
+    --muted: #8a8278;
+    --card: #ffffff;
+    --border: #e0dbd3;
+    --success: #2d6a4f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 100vh;
+  }
+  header {
+    background: var(--ink);
+    padding: 28px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 3px solid var(--accent2);
+  }
+  .header-left h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.6rem;
+    color: var(--paper);
+    letter-spacing: -0.02em;
+  }
+  .header-left p {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 3px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .refresh-btn {
+    background: var(--accent2);
+    color: white;
+    border: none;
+    padding: 12px 28px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .refresh-btn:hover { background: #a33a22; transform: translateY(-1px); }
+  .refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .filters {
+    background: var(--ink);
+    padding: 10px 40px 14px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .filter-tag {
+    background: rgba(255,255,255,0.08);
+    color: var(--paper);
+    font-size: 0.72rem;
+    padding: 4px 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .main { max-width: 1100px; margin: 0 auto; padding: 36px 24px; }
+  .status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .status-text { font-size: 0.82rem; color: var(--muted); }
+  .job-count { font-weight: 600; color: var(--accent); }
+  .loading {
+    text-align: center;
+    padding: 80px 20px;
+  }
+  .loading-spinner {
+    width: 40px; height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading p { color: var(--muted); font-size: 0.9rem; }
+  .loading .loading-step { font-size: 0.8rem; color: var(--accent); margin-top: 8px; }
+  .empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    color: var(--muted);
+  }
+  .empty-state h2 { font-family: 'DM Serif Display', serif; font-size: 1.4rem; margin-bottom: 8px; color: var(--ink); }
+  .jobs-grid { display: flex; flex-direction: column; gap: 20px; }
+  .job-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    padding: 24px 28px;
+    transition: all 0.2s;
+    position: relative;
+  }
+  .job-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.08); transform: translateY(-1px); }
+  .job-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  .job-title { font-family: 'DM Serif Display', serif; font-size: 1.18rem; color: var(--ink); line-height: 1.3; }
+  .job-company { font-size: 0.88rem; font-weight: 600; color: var(--accent); margin-top: 4px; }
+  .job-badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .badge {
+    font-size: 0.72rem;
+    padding: 3px 10px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .badge-remote { background: #e8f4ec; color: var(--success); }
+  .badge-salary { background: #fff3f0; color: var(--accent2); }
+  .badge-posted { background: #eef2f8; color: var(--accent); }
+  .badge-ai { background: #f0eeff; color: #5b3fc8; }
+  .job-description {
+    margin-top: 14px;
+    font-size: 0.86rem;
+    line-height: 1.6;
+    color: #3a3530;
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+  }
+  .job-description.collapsed { max-height: 72px; overflow: hidden; position: relative; }
+  .job-description.collapsed::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 30px;
+    background: linear-gradient(transparent, white);
+  }
+  .toggle-desc {
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-size: 0.78rem;
+    cursor: pointer;
+    padding: 6px 0;
+    font-weight: 500;
+  }
+  .job-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+  }
+  .action-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 16px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1.5px solid;
+    letter-spacing: 0.02em;
+  }
+  .btn-resume { background: var(--accent); color: white; border-color: var(--accent); }
+  .btn-resume:hover { background: #163d70; }
+  .btn-cover { background: transparent; color: var(--accent2); border-color: var(--accent2); }
+  .btn-cover:hover { background: var(--accent2); color: white; }
+  .btn-outreach { background: transparent; color: var(--success); border-color: var(--success); }
+  .btn-outreach:hover { background: var(--success); color: white; }
+  .btn-link { background: transparent; color: var(--muted); border-color: var(--border); font-size: 0.75rem; }
+  .btn-link:hover { color: var(--ink); border-color: var(--ink); }
+  .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .action-btn.generating { opacity: 0.7; }
+  .match-score {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+  .score-high { background: #e8f4ec; color: var(--success); border: 2px solid var(--success); }
+  .score-med { background: #fff3f0; color: var(--accent2); border: 2px solid var(--accent2); }
+  .error-banner {
+    background: #fff3f0;
+    border: 1px solid #f5c6bc;
+    padding: 16px 20px;
+    color: #8b2500;
+    font-size: 0.86rem;
+    margin-bottom: 20px;
+  }
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--ink);
+    color: var(--paper);
+    padding: 12px 20px;
+    font-size: 0.84rem;
+    z-index: 1000;
+    animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  footer {
+    text-align: center;
+    padding: 24px;
+    color: var(--muted);
+    font-size: 0.75rem;
+    border-top: 1px solid var(--border);
+    margin-top: 40px;
+  }
+  @media (max-width: 600px) {
+    header { padding: 20px; flex-direction: column; gap: 16px; align-items: flex-start; }
+    .main { padding: 20px 16px; }
+    .job-card { padding: 18px; }
+    .match-score { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>PM Job Finder</h1>
+    <p>Shilpi Karn &nbsp;|&nbsp; AI Product Manager &nbsp;|&nbsp; Healthcare &amp; Health Insurance</p>
+  </div>
+  <button class="refresh-btn" id="refreshBtn" onclick="searchJobs()">
+    <span id="refreshIcon">&#8635;</span> Search Jobs
+  </button>
+</header>
+
+<div class="filters">
+  <span class="filter-tag">&#128205; Remote / Phoenix AZ</span>
+  <span class="filter-tag">&#128176; $160K+ Salary</span>
+  <span class="filter-tag">&#8987; Posted within 24 hours</span>
+  <span class="filter-tag">&#129302; AI Product Manager</span>
+  <span class="filter-tag">&#127973; Health Tech / Health Insurance</span>
+</div>
+
+<div class="main">
+  <div class="status-bar">
+    <span class="status-text" id="statusText">Click "Search Jobs" to find the latest openings</span>
+    <span class="job-count" id="jobCount"></span>
+  </div>
+
+  <div id="errorBanner" class="error-banner" style="display:none;"></div>
+  <div id="loadingState" class="loading" style="display:none;">
+    <div class="loading-spinner"></div>
+    <p>Searching for the latest PM openings...</p>
+    <p class="loading-step" id="loadingStep">Scanning job boards and company career pages</p>
+  </div>
+  <div id="emptyState" class="empty-state">
+    <h2>Ready to Search</h2>
+    <p>Hit the search button to find AI Product Manager roles<br>in health tech and health insurance companies.</p>
+  </div>
+  <div id="jobsGrid" class="jobs-grid" style="display:none;"></div>
+</div>
+
+<footer>
+  All documents are tailored using verified facts from Shilpi Karn's professional profile. No fabricated statements.
+</footer>
+
+<script>
+const PROFILE = {
+  name: "Shilpi Karn",
+  email: "shilpikarn@gmail.com",
+  linkedin: "linkedin.com/in/shilpikarn",
+  github: "shilpi-k.github.io/CARA",
+  location: "Gilbert, Arizona",
+  summary: "Product and program leader with 19 years in US healthcare payor operations — specializing in claims adjudication, utilization management, prior authorization, provider and member data management, and Medicaid programs. Track record delivering automation products that eliminate manual work at scale. Currently building AI-powered tools independently using LLMs.",
+  experience: [
+    {
+      title: "Program Manager",
+      company: "Ascension",
+      period: "2023 – Present",
+      bullets: [
+        "Reduced provider match exception queues from 300 per day to 60, an 80% reduction, by designing and delivering an automated provider matching engine",
+        "Reduced member identity manual review volume by 70% across 6 business units through a member-match automation initiative",
+        "Built a net-new authorization ingestion platform from scratch in partnership with a third-party vendor — replaced a fully manual prior auth intake workflow with straight-through processing; became baseline architecture for next vendor integration",
+        "Managed delivery across 5 to 8 developers and testers simultaneously across 3 concurrent workstreams, presenting progress to senior leadership throughout",
+        "Ensured HIPAA and CMS compliance across all releases"
+      ]
+    },
+    {
+      title: "Product Consultant / Technical Product Manager",
+      company: "Cognizant — UnitedHealthcare and CVS Caremark",
+      period: "2007 – 2023",
+      bullets: [
+        "Redesigned claims adjudication pipeline at UnitedHealthcare using cloud-hosted APIs on Kubernetes — cut cycle time from 2 to 3 hours to under 20 minutes with 35% operational cost reduction for millions of monthly claims",
+        "Resolved CMS enforcement action at CVS Caremark by analyzing member and claims data integrity failures, defining correction workflows, and leading remediation — CVS exited the sanction and restored Part D enrollment eligibility",
+        "Built a 0 to 1 pre-service cost estimator from UX research through production launch, improving member experience and reducing inbound inquiry volume",
+        "Built a predictive denial engine that identified likely claim rejections before submission, reducing rework costs by 50%",
+        "Delivered EDI 834 member enrollment, 837 claims, 278 prior authorization, and 835 remittance transaction processing across Medicaid and commercial lines",
+        "Conducted KT sessions on Facets APIs to build team capability on integration design"
+      ]
+    }
+  ],
+  skills: [
+    "Prior Authorization and UM", "Claims Adjudication", "Provider Data Management", "Member Enrollment and Eligibility",
+    "EDI 834/837/278/835", "Facets (15+ years)", "Jira", "Confluence", "SQL and Oracle",
+    "Cloud APIs on Kubernetes", "Agile/Scrum", "HIPAA and CMS Compliance",
+    "Medicaid and Commercial Programs", "AI Tools: Claude API, ChatGPT, Google AI Studio, Miro, Figma, Lovable",
+    "Product Roadmap and Backlog Management", "User Stories and Acceptance Criteria"
+  ],
+  education: [
+    "B.Tech, Information Technology — Vellore Institute of Technology, 2007",
+    "AI Product Management — HelloPM, In Progress"
+  ],
+  sideProjects: [
+    "CARA: Pre-adjudication claims-to-auth matching engine built with Claude API — scores risk probability before adjudication, flags high-risk mismatches. Live at shilpi-k.github.io/CARA"
+  ]
+};
+
+const API_URL = "https://api.anthropic.com/v1/messages";
+const MODEL = "claude-sonnet-4-20250514";
+
+async function callClaude(messages, system, tools) {
+  const body = {
+    model: MODEL,
+    max_tokens: 4000,
+    system,
+    messages
+  };
+  if (tools) body.tools = tools;
+
+  const res = await fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`API error ${res.status}: ${err}`);
+  }
+  return res.json();
+}
+
+async function searchJobs() {
+  const btn = document.getElementById("refreshBtn");
+  btn.disabled = true;
+  btn.innerHTML = '<span style="display:inline-block;animation:spin 0.8s linear infinite">&#8635;</span> Searching...';
+
+  document.getElementById("emptyState").style.display = "none";
+  document.getElementById("jobsGrid").style.display = "none";
+  document.getElementById("loadingState").style.display = "block";
+  document.getElementById("errorBanner").style.display = "none";
+  document.getElementById("jobCount").textContent = "";
+  document.getElementById("statusText").textContent = "Searching job boards...";
+
+  const steps = [
+    "Scanning LinkedIn, Indeed, and company career pages...",
+    "Filtering for $160K+ salary range...",
+    "Checking remote and Phoenix area locations...",
+    "Evaluating match with your profile...",
+    "Preparing job listings..."
+  ];
+  let stepIdx = 0;
+  const stepInterval = setInterval(() => {
+    if (stepIdx < steps.length) {
+      document.getElementById("loadingStep").textContent = steps[stepIdx++];
+    }
+  }, 2000);
+
+  try {
+    const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+    const data = await callClaude([{
+      role: "user",
+      content: `Today is ${today}. Search for the top 10 Product Manager job openings that meet ALL of these criteria:
+1. Role type: AI Product Manager, Senior Product Manager, Staff Product Manager, Principal Product Manager, or Technical Product Manager
+2. Industry: health tech companies OR health insurance companies (payors)
+3. Posted within the last 24 hours (today or yesterday)
+4. Salary: $160,000 or above annually
+5. Location: Remote (US) OR within Phoenix/Tempe/Scottsdale/Gilbert Arizona area
+
+Search for real, current job postings. Look on LinkedIn Jobs, company career pages (Oscar Health, Cotiviti, Cohere Health, Centene, Elevance Health, Molina Healthcare, Waystar, Zelis, Innovaccer, CVS Health, Devoted Health, Medallion, UnitedHealth Group/Optum, Humana), Indeed, and other job boards.
+
+Return ONLY a valid JSON object with this exact structure — no markdown, no explanation, just the JSON:
+{
+  "jobs": [
+    {
+      "id": "1",
+      "title": "Job Title",
+      "company": "Company Name",
+      "location": "Remote / Phoenix AZ / etc",
+      "salary": "$180K - $220K",
+      "posted": "2 hours ago",
+      "url": "https://actual-job-url.com",
+      "description": "2-3 sentence description of the role and what they are building",
+      "keyRequirements": ["requirement 1", "requirement 2", "requirement 3"],
+      "matchScore": 85,
+      "whyMatch": "Brief reason why this matches Shilpi's background"
+    }
+  ],
+  "searchNote": "Brief note about search results"
+}`
+    }], "You are a job search specialist. Search the web for real, current job postings and return structured JSON only. No markdown formatting. Just raw JSON.", [{
+      type: "web_search_20250305",
+      name: "web_search"
+    }]);
+
+    clearInterval(stepInterval);
+
+    let jobsJson = "";
+    for (const block of data.content) {
+      if (block.type === "text") jobsJson += block.text;
+    }
+
+    jobsJson = jobsJson.trim();
+    const jsonMatch = jobsJson.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("No valid JSON found in response");
+
+    const result = JSON.parse(jsonMatch[0]);
+    const jobs = result.jobs || [];
+
+    if (jobs.length === 0) throw new Error("No jobs found matching your criteria");
+
+    renderJobs(jobs, result.searchNote);
+
+  } catch (err) {
+    clearInterval(stepInterval);
+    document.getElementById("loadingState").style.display = "none";
+    document.getElementById("errorBanner").style.display = "block";
+    document.getElementById("errorBanner").textContent = "Search error: " + err.message + ". Please try refreshing again.";
+    document.getElementById("emptyState").style.display = "block";
+    document.getElementById("statusText").textContent = "Search failed — please try again";
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span>&#8635;</span> Refresh Search';
+  }
+}
+
+function renderJobs(jobs, note) {
+  document.getElementById("loadingState").style.display = "none";
+  document.getElementById("emptyState").style.display = "none";
+
+  const grid = document.getElementById("jobsGrid");
+  grid.innerHTML = "";
+  grid.style.display = "flex";
+
+  document.getElementById("statusText").textContent = note || `Found ${jobs.length} matching roles`;
+  document.getElementById("jobCount").textContent = `${jobs.length} jobs`;
+
+  jobs.forEach(job => {
+    const card = document.createElement("div");
+    card.className = "job-card";
+    const score = job.matchScore || 75;
+    const scoreClass = score >= 80 ? "score-high" : "score-med";
+
+    card.innerHTML = `
+      <div class="match-score ${scoreClass}">${score}%</div>
+      <div class="job-card-header">
+        <div>
+          <div class="job-title">${escHtml(job.title)}</div>
+          <div class="job-company">${escHtml(job.company)}</div>
+        </div>
+      </div>
+      <div class="job-badges">
+        <span class="badge badge-salary">&#128176; ${escHtml(job.salary)}</span>
+        <span class="badge badge-remote">&#127760; ${escHtml(job.location)}</span>
+        <span class="badge badge-posted">&#128337; ${escHtml(job.posted)}</span>
+        <span class="badge badge-ai">&#129302; AI/Health Tech</span>
+      </div>
+      <div class="job-description collapsed" id="desc-${job.id}">
+        ${escHtml(job.description)}
+        ${job.keyRequirements ? '<ul style="margin-top:10px;padding-left:18px;">' + job.keyRequirements.map(r => `<li style="margin-bottom:4px;">${escHtml(r)}</li>`).join('') + '</ul>' : ''}
+        ${job.whyMatch ? `<p style="margin-top:10px;padding:8px 12px;background:#eef2f8;font-size:0.82rem;border-left:3px solid #1e4d8c;"><strong>Why this fits:</strong> ${escHtml(job.whyMatch)}</p>` : ''}
+      </div>
+      <button class="toggle-desc" onclick="toggleDesc('${job.id}', this)">Show more ▾</button>
+      <div class="job-actions">
+        <button class="action-btn btn-resume" onclick="generateDoc('resume', ${JSON.stringify(job).replace(/"/g, '&quot;')}, this)">
+          &#128196; Download Resume
+        </button>
+        <button class="action-btn btn-cover" onclick="generateDoc('cover', ${JSON.stringify(job).replace(/"/g, '&quot;')}, this)">
+          &#9998; Cover Letter
+        </button>
+        <button class="action-btn btn-outreach" onclick="generateDoc('outreach', ${JSON.stringify(job).replace(/"/g, '&quot;')}, this)">
+          &#128172; Outreach Message
+        </button>
+        ${job.url && job.url !== '#' ? `<button class="action-btn btn-link" onclick="window.open('${escHtml(job.url)}', '_blank')">&#128279; View Posting</button>` : ''}
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function toggleDesc(id, btn) {
+  const desc = document.getElementById("desc-" + id);
+  if (desc.classList.contains("collapsed")) {
+    desc.classList.remove("collapsed");
+    btn.textContent = "Show less ▴";
+  } else {
+    desc.classList.add("collapsed");
+    btn.textContent = "Show more ▾";
+  }
+}
+
+async function generateDoc(type, job, btn) {
+  const labels = { resume: "Generating Resume...", cover: "Generating Cover Letter...", outreach: "Generating Message..." };
+  const origText = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = labels[type];
+  btn.classList.add("generating");
+
+  try {
+    let prompt, filename;
+
+    if (type === "resume") {
+      prompt = buildResumePrompt(job);
+      filename = `Shilpi_Karn_Resume_${job.company.replace(/\s+/g, '_')}.docx`;
+    } else if (type === "cover") {
+      prompt = buildCoverPrompt(job);
+      filename = `Shilpi_Karn_CoverLetter_${job.company.replace(/\s+/g, '_')}.docx`;
+    } else {
+      prompt = buildOutreachPrompt(job);
+      filename = `Shilpi_Karn_Outreach_${job.company.replace(/\s+/g, '_')}.docx`;
+    }
+
+    const data = await callClaude([{ role: "user", content: prompt }],
+      "You are a professional resume writer. Generate document content in the exact JSON format requested. Return ONLY valid JSON, no markdown, no explanation.");
+
+    let content = "";
+    for (const block of data.content) {
+      if (block.type === "text") content += block.text;
+    }
+
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("Invalid response format");
+    const docData = JSON.parse(jsonMatch[0]);
+
+    if (type === "outreach") {
+      await createOutreachDocx(docData, filename);
+    } else {
+      await createDocx(docData, filename, type);
+    }
+
+    showToast(`${filename} downloaded successfully`);
+  } catch (err) {
+    showToast("Error generating document: " + err.message);
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origText;
+    btn.classList.remove("generating");
+  }
+}
+
+function buildResumePrompt(job) {
+  return `Generate a tailored resume for Shilpi Karn applying to: ${job.title} at ${job.company}.
+
+Job description: ${job.description}
+Key requirements: ${(job.keyRequirements || []).join(", ")}
+
+PROFILE FACTS (use ONLY these verified facts, do not invent anything):
+${JSON.stringify(PROFILE, null, 2)}
+
+Return a JSON object with this exact structure:
+{
+  "summary": "2-3 sentence tailored summary using only profile facts",
+  "experience": [
+    {
+      "title": "job title",
+      "company": "company name",
+      "period": "dates",
+      "bullets": ["bullet 1 grounded in profile facts", "bullet 2", "bullet 3", "bullet 4"]
+    }
+  ],
+  "skills": ["skill 1", "skill 2", "...up to 14 skills relevant to this job from the profile"],
+  "education": ["education item 1", "education item 2"]
+}
+
+Rules:
+- Every bullet must be grounded in the verified facts in the profile
+- Do not invent metrics, achievements, or experiences not in the profile
+- Use problem to action to result structure where facts support it
+- Tailor language to match the job requirements using profile facts
+- No em dashes anywhere`;
+}
+
+function buildCoverPrompt(job) {
+  return `Generate a tailored cover letter for Shilpi Karn applying to: ${job.title} at ${job.company}.
+
+Job description: ${job.description}
+Key requirements: ${(job.keyRequirements || []).join(", ")}
+
+PROFILE FACTS (use ONLY these verified facts):
+${JSON.stringify(PROFILE, null, 2)}
+
+Return a JSON object:
+{
+  "subject": "Re: [Job Title] at [Company]",
+  "paragraphs": [
+    "Opening paragraph — why this role and company specifically",
+    "Paragraph 2 — most relevant experience bullet from profile",
+    "Paragraph 3 — second most relevant achievement from profile",
+    "Closing paragraph — clear ask and contact info"
+  ]
+}
+
+Rules:
+- Only use facts from the profile, never invent achievements
+- Keep each paragraph to 3-4 sentences max
+- Be specific and confident, not generic
+- No em dashes`;
+}
+
+function buildOutreachPrompt(job) {
+  return `Generate a short LinkedIn outreach message for Shilpi Karn reaching out about: ${job.title} at ${job.company}.
+
+Job description: ${job.description}
+
+PROFILE FACTS (use ONLY these verified facts):
+Name: ${PROFILE.name}
+Location: ${PROFILE.location}
+Key achievements: 80% reduction in provider match exceptions, 70% reduction in member identity reviews, CMS sanction remediation at CVS, claims adjudication redesign 2-3hrs to 20min, built CARA AI tool at shilpi-k.github.io/CARA
+Years experience: 19 years healthcare payor
+
+Return a JSON object:
+{
+  "subject": "Subject line for email if applicable",
+  "message": "Full LinkedIn message under 150 words. Confident and specific. No 'I hope you are well'. No em dashes. End with one specific question."
+}
+
+Rules:
+- Short, confident, peer-to-peer tone
+- Only reference verified facts above
+- Include CARA project link if role involves AI
+- End with a specific question not a generic 'let me know'`;
+}
+
+async function createDocx(data, filename, type) {
+  const { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel, UnderlineType } = docx;
+
+  const ACCENT_COLOR = "1A3A6B";
+  const children = [];
+
+  // Name header
+  children.push(new Paragraph({
+    alignment: AlignmentType.CENTER,
+    children: [new TextRun({ text: PROFILE.name, bold: true, size: 40, color: ACCENT_COLOR, font: "Calibri" })]
+  }));
+
+  // Contact info
+  children.push(new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 60, after: 120 },
+    children: [new TextRun({
+      text: `${PROFILE.email}  |  ${PROFILE.linkedin}  |  ${PROFILE.github}  |  ${PROFILE.location}`,
+      size: 18, color: "666666", font: "Calibri"
+    })]
+  }));
+
+  if (type === "resume") {
+    // Summary section
+    children.push(new Paragraph({
+      spacing: { before: 160, after: 60 },
+      border: { bottom: { value: "single", size: 6, color: ACCENT_COLOR, space: 2 } },
+      children: [new TextRun({ text: "SUMMARY", bold: true, size: 20, color: ACCENT_COLOR, font: "Calibri" })]
+    }));
+    children.push(new Paragraph({
+      spacing: { before: 80, after: 120 },
+      children: [new TextRun({ text: data.summary || "", size: 20, font: "Calibri" })]
+    }));
+
+    // Experience
+    children.push(new Paragraph({
+      spacing: { before: 160, after: 60 },
+      border: { bottom: { value: "single", size: 6, color: ACCENT_COLOR, space: 2 } },
+      children: [new TextRun({ text: "EXPERIENCE", bold: true, size: 20, color: ACCENT_COLOR, font: "Calibri" })]
+    }));
+
+    for (const exp of (data.experience || [])) {
+      children.push(new Paragraph({
+        spacing: { before: 120, after: 40 },
+        children: [
+          new TextRun({ text: exp.title, bold: true, size: 20, font: "Calibri" }),
+          new TextRun({ text: "  |  ", size: 20, color: "999999", font: "Calibri" }),
+          new TextRun({ text: exp.company, bold: true, size: 20, color: ACCENT_COLOR, font: "Calibri" }),
+          new TextRun({ text: "  |  " + exp.period, size: 18, color: "666666", italics: true, font: "Calibri" })
+        ]
+      }));
+      for (const b of (exp.bullets || [])) {
+        children.push(new Paragraph({
+          bullet: { level: 0 },
+          spacing: { before: 30, after: 30 },
+          children: [new TextRun({ text: b, size: 19, font: "Calibri" })]
+        }));
+      }
+    }
+
+    // Skills
+    children.push(new Paragraph({
+      spacing: { before: 160, after: 60 },
+      border: { bottom: { value: "single", size: 6, color: ACCENT_COLOR, space: 2 } },
+      children: [new TextRun({ text: "CORE COMPETENCIES", bold: true, size: 20, color: ACCENT_COLOR, font: "Calibri" })]
+    }));
+    children.push(new Paragraph({
+      spacing: { before: 80, after: 80 },
+      children: [new TextRun({ text: (data.skills || []).join("  •  "), size: 19, font: "Calibri" })]
+    }));
+
+    // Education
+    children.push(new Paragraph({
+      spacing: { before: 160, after: 60 },
+      border: { bottom: { value: "single", size: 6, color: ACCENT_COLOR, space: 2 } },
+      children: [new TextRun({ text: "EDUCATION AND PROFESSIONAL DEVELOPMENT", bold: true, size: 20, color: ACCENT_COLOR, font: "Calibri" })]
+    }));
+    for (const edu of (data.education || [])) {
+      children.push(new Paragraph({
+        spacing: { before: 60, after: 40 },
+        children: [new TextRun({ text: edu, size: 19, font: "Calibri" })]
+      }));
+    }
+
+  } else if (type === "cover") {
+    // Subject
+    children.push(new Paragraph({
+      spacing: { before: 120, after: 160 },
+      children: [new TextRun({ text: data.subject || "", bold: true, size: 20, color: ACCENT_COLOR, font: "Calibri" })]
+    }));
+    children.push(new Paragraph({
+      spacing: { before: 60, after: 120 },
+      children: [new TextRun({ text: "Dear Hiring Manager,", size: 20, font: "Calibri" })]
+    }));
+    for (const para of (data.paragraphs || [])) {
+      children.push(new Paragraph({
+        spacing: { before: 100, after: 100 },
+        children: [new TextRun({ text: para, size: 20, font: "Calibri" })]
+      }));
+    }
+    children.push(new Paragraph({
+      spacing: { before: 160, after: 60 },
+      children: [new TextRun({ text: "Sincerely,", size: 20, font: "Calibri" })]
+    }));
+    children.push(new Paragraph({
+      spacing: { before: 60 },
+      children: [new TextRun({ text: PROFILE.name, bold: true, size: 20, font: "Calibri" })]
+    }));
+  }
+
+  const doc = new Document({
+    sections: [{
+      properties: {
+        page: { margin: { top: 1080, right: 1080, bottom: 1080, left: 1080 } }
+      },
+      children
+    }]
+  });
+
+  const blob = await Packer.toBlob(doc);
+  downloadBlob(blob, filename);
+}
+
+async function createOutreachDocx(data, filename) {
+  const { Document, Packer, Paragraph, TextRun } = docx;
+  const ACCENT_COLOR = "1A3A6B";
+
+  const doc = new Document({
+    sections: [{
+      properties: {
+        page: { margin: { top: 1080, right: 1080, bottom: 1080, left: 1080 } }
+      },
+      children: [
+        new Paragraph({
+          spacing: { before: 0, after: 80 },
+          children: [new TextRun({ text: "LinkedIn Outreach Message", bold: true, size: 24, color: ACCENT_COLOR, font: "Calibri" })]
+        }),
+        new Paragraph({
+          spacing: { before: 60, after: 160 },
+          children: [new TextRun({ text: "Subject: " + (data.subject || ""), size: 20, italics: true, color: "555555", font: "Calibri" })]
+        }),
+        new Paragraph({
+          spacing: { before: 0, after: 80 },
+          children: [new TextRun({ text: data.message || "", size: 20, font: "Calibri" })]
+        }),
+        new Paragraph({
+          spacing: { before: 160, after: 0 },
+          children: [new TextRun({ text: "— " + PROFILE.name, size: 20, font: "Calibri", color: "666666" })]
+        })
+      ]
+    }]
+  });
+
+  const blob = await Packer.toBlob(doc);
+  downloadBlob(blob, filename);
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function showToast(msg) {
+  const existing = document.querySelector(".toast");
+  if (existing) existing.remove();
+  const toast = document.createElement("div");
+  toast.className = "toast";
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3500);
+}
+
+function escHtml(str) {
+  return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+</script>
+</body>
+</html>
